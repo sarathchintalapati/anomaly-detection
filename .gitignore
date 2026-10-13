@@ -1,0 +1,40 @@
+# ---- Images (data lives outside git) ----
+*.png
+*.jpg
+*.jpeg
+*.bmp
+*.tif
+*.tiff
+*.webp
+*.gif
+
+# ---- Models / checkpoints ----
+*.pt
+*.pth
+*.ckpt
+*.onnx
+*.npy
+*.npz
+models/*
+!models/.gitkeep
+
+# ---- Data & outputs (keep folder structure only) ----
+data/**/*
+!data/**/
+!data/**/.gitkeep
+outputs/*
+!outputs/.gitkeep
+
+# ---- Python ----
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.ipynb_checkpoints/
+.pytest_cache/
+
+# ---- OS / IDE ----
+.DS_Store
+.idea/
+.vscode/

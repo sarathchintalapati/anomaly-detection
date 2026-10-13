@@ -1,0 +1,21 @@
+# ---------- data ----------
+data_root: data              # expects data/train/good, data/test/good, data/test/<defect folders>
+image_size: 224              # images are resized to image_size x image_size
+batch_size: 8                # lower to 4 if you run out of memory
+
+# ---------- model (PatchCore-style) ----------
+backbone: resnet18           # resnet18 (light) | resnet34 | resnet50 | wide_resnet50_2 (heavy, best accuracy)
+layers: [2, 3]               # which ResNet stages to take features from
+coreset_ratio: 0.1           # fraction of patch features kept in the memory bank
+blur_sigma: 4.0              # smoothing of the anomaly heatmap
+
+# ---------- threshold calibration ----------
+val_fraction: 0.1            # share of good training images held out to calibrate the threshold
+threshold_sigma: 3.0         # threshold = mean(val scores) + sigma * std(val scores)
+
+# ---------- misc ----------
+model_path: models/patchcore.pt
+output_dir: outputs
+device: auto                 # auto | mps | cuda | cpu
+seed: 0
+num_workers: 0               # keep 0 on macOS
