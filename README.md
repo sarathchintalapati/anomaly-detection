@@ -139,5 +139,5 @@ Then run the relevant notebook or script depending on the approach you want to t
 ## Notes
 
 - The PatchCore-style approach is good when you have no defect annotations.
-- The segmentation approach is better when you have labeled masks and want pixel-level defect localization.
+- The segmentation approach is better when you have labeled masks and want pixel-level defect localization. This has the ability to get the defect dimensions if we need to judge based of that. 
 - The Canny approach is a lightweight rule-based alternative focused on contour structure after background removal.
