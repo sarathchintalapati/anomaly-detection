@@ -1,37 +1,126 @@
-# Image Anomaly Detection (PatchCore-style)
+# Image Defect Detection Project
 
-Detect defects in images when you only have **good (defect-free) images for training** and just a few defect examples.
+This project explores three different ways to separate good vs bad parts in metal-plate inspection images.
 
-The model learns what "normal" looks like from good images only, then flags anything that doesn't match, and shows **where** (heatmap).
-It is built to run on a laptop (tested design target: MacBook Pro, 8 GB RAM, CPU or Apple GPU via MPS).
+## 1) Original anomaly-detection approach
 
-## How it works
+This is the original PatchCore-style method already described in the project.
 
-1. A frozen ImageNet-pretrained ResNet (default `resnet18`) converts each image into a grid of patch features.
-2. Patch features from all good images are compressed into a small **memory bank** (greedy coreset).
-3. For a new image, each patch is compared with its nearest neighbour in the memory bank. A large distance means "never seen in good images".
-4. The image score is the maximum patch distance. If `score >= threshold`, the image is flagged as anomalous.
+### Idea
+- Use only good images during training.
+- Learn what a normal plate looks like.
+- For a new image, compare local patch features to the normal memory bank.
+- A large distance indicates an anomaly.
+- The image score is computed from the most unusual patch, and the result is shown as a heatmap.
 
-There is **no gradient training**, so "training" takes a minute or two and needs very little memory. It works well with ~200 images.
+### Typical workflow
+1. A pretrained ResNet extracts patch features from each image.
+2. Good images are compressed into a memory bank.
+3. New images are scored against this memory bank.
+4. A threshold decides whether the image is normal or abnormal.
 
-## Project layout
+### Best use case
+- Suitable when you only have good images and no pixel-wise masks.
+- Good for general anomaly detection, not fine defect segmentation.
+
+This is the baseline approach and is the one already described in the existing project README and training pipeline.
+
+---
+
+## 2) Supervised segmentation approach with ground-truth defect masks
+
+This second approach is the segmentation pipeline used to isolate the object, train a model on defect masks, and then use the segmented NG region to decide pass/fail.
+
+### Idea
+- Remove the background first to isolate the metal plate.
+- Crop to the object bounding box and resize the plate region.
+- Train a segmentation model to predict defect pixels inside the plate area.
+- Use the ground-truth masks on bad images to supervise learning.
+- For each predicted image, compute the NG (defective) percentage inside the plate.
+- Use a threshold on the NG percentage to classify the image as good or bad.
+
+### Typical workflow
+1. Background removal isolates the main object from the surrounding scene.
+2. The plate is cropped and resized to a fixed training size.
+3. A U-Net style network is trained with defect masks for bad images.
+4. The network predicts defective pixels on the plate interior.
+5. The NG area is compared to the total plate area.
+6. If the percentage is above a threshold, the image is flagged as bad.
+
+### Best use case
+- Best when defect masks are available for training.
+- More controlled and more interpretable than purely unsupervised anomaly detection.
+- Stronger for known defect types and pixel-level segmentation.
+
+This is the approach implemented in the defect segmentation notebook and associated training/inference scripts.
+
+---
+
+## 3) Canny-edge approach after background removal
+
+This third approach is a simple rule-based method that removes the background, applies Canny edge detection, and then uses a mathematical criterion to decide good vs bad.
+
+### Idea
+- Remove the background to isolate the object.
+- Convert the segmented object to grayscale.
+- Smooth the image slightly to reduce noise.
+- Apply Canny edge detection to find the object boundaries and internal edges.
+- Compute a simple edge-based metric (for example, edge density, contour length, or number of edge pixels in the object region).
+- Compare that metric to a threshold to separate good and bad images.
+
+### Typical workflow
+1. Background removal extracts the object mask.
+2. The segmented object is normalized and converted to grayscale.
+3. Canny edge detection extracts contour information.
+4. A simple mathematical rule is applied to the edge map.
+5. If the edge metric exceeds or falls below a threshold, the part is classified as good or bad.
+
+### Best use case
+- Lightweight and explainable.
+- Good when the defect produces a clear boundary or contour change.
+- Easier to interpret than a full neural network classifier.
+
+This is the simpler alternative that was explored as a direct edge-based decision rule after segmentation.
+
+---
+
+## Repository contents
 
 ```
 .
-├── config.yaml             # all settings
+├── anomaly_detection_notebook.ipynb   # original PatchCore-style anomaly detection
+├── defect_segmentation.ipynb           # supervised segmentation approach
+├── background_removal_canny.ipynb      # background removal + Canny edge pipeline
+├── config.yaml                         # configuration for the experiments
 ├── requirements.txt
-├── src/anomaly/            # library code (data, model, utils)
+├── src/anomaly/                        # shared project code
 ├── scripts/
-│   ├── train.py            # build memory bank + calibrate threshold
-│   ├── evaluate.py         # metrics + heatmaps on the test set
-│   ├── predict.py          # score new image(s)
-│   └── make_demo_data.py   # synthetic data to test the pipeline
-├── data/                   # your images (git-ignored)
-├── models/                 # saved model (git-ignored)
-└── outputs/                # heatmaps, plots, csv (git-ignored)
+│   ├── train.py                        # original anomaly-model training
+│   ├── evaluate.py                    # validation and scoring
+│   ├── predict.py                     # inference on new images
+│   └── make_demo_data.py              # synthetic demo data generator
+├── data/                              # project datasets
+├── models/                            # trained model weights and outputs
+├── outputs/                           # evaluation artifacts and predictions
+├── README.md                          # project overview
+└── .gitignore
 ```
 
-## Setup (macOS)
+---
+
+## Practical summary
+
+The project moved through three increasingly task-specific ideas:
+
+1. Unsupervised anomaly detection: learn normality from good images only.
+2. Supervised defect segmentation: train on masks and threshold NG percentage.
+3. Edge-based rule: remove background, then detect edges and apply a simple mathematical decision function.
+
+In practice, the first method is the most general unsupervised baseline, the second is the most accurate when defect masks exist, and the third is the simplest and most interpretable engineering rule for rapid inspection.
+
+---
+
+## Quick setup
 
 ```bash
 python3 -m venv .venv
@@ -39,71 +128,16 @@ source .venv/bin/activate
 pip install -r requirements.txt
 ```
 
-The first run downloads the pretrained ResNet weights (needs internet once).
+Then run the relevant notebook or script depending on the approach you want to test.
 
-## Data layout
+- Original anomaly model: `anomaly_detection_notebook.ipynb`
+- Segmentation approach: `defect_segmentation.ipynb`
+- Canny edge approach: `background_removal_canny.ipynb`
 
-Put your images here (png/jpg/bmp/tif):
+---
 
-```
-data/
-├── train/good/        # your ~200 defect-free images
-└── test/
-    ├── good/          # defect-free images NOT used in training
-    └── defect/        # images with anomalies (any extra folders here also count as defect)
-```
+## Notes
 
-Folder names define the labels: `test/good` = normal, every other folder in `test/` = anomalous.
-The data folders are git-ignored; only empty `.gitkeep` placeholders are committed.
-
-## Quick start
-
-```bash
-# (optional) sanity check on synthetic data
-python scripts/make_demo_data.py
-
-# 1. train: builds the memory bank and sets a threshold
-python scripts/train.py
-
-# 2. evaluate on data/test
-python scripts/evaluate.py
-
-# 3. predict on new images
-python scripts/predict.py path/to/image.png
-python scripts/predict.py path/to/folder/
-```
-
-Outputs go to `outputs/eval/` (heatmaps, `roc.png`, `score_hist.png`, `scores.csv`) and `outputs/predictions/`.
-
-## Threshold
-
-`train.py` holds out 10% of the good images and sets `threshold = mean + 3 * std` of their scores. This uses no defect images, so it is safe, but may be too strict or too loose.
-After checking `evaluate.py` (look at `score_hist.png`), you can:
-
-- tune `threshold_sigma` in `config.yaml` and retrain, or
-- run `python scripts/evaluate.py --save-threshold` to store the best-F1 threshold from the test set, or
-- override ad hoc with `--threshold 1.8` in `evaluate.py` / `predict.py`.
-
-With only a few defect images, test metrics are noisy and the best-F1 threshold is optimistic. Treat them as a rough guide.
-
-## Tips for 8 GB RAM
-
-- Defaults (`resnet18`, 224 px, batch 8) use roughly 1–2 GB.
-- Out of memory? Lower `batch_size` to 2–4 or `coreset_ratio` to 0.05.
-- Want more accuracy? Try `backbone: wide_resnet50_2` and `image_size: 256` (slower, more memory).
-- Small defects missed? Increase `image_size` (e.g. 320) so they cover more pixels.
-- Keep image framing/lighting consistent between good and test images. The method is sensitive to changes in the setup, which is also why it detects defects.
-- `device: auto` picks Apple GPU (MPS) when available, otherwise CPU. Set `device: cpu` if you hit MPS issues.
-
-## Pushing to git
-
-```bash
-git init
-git add .
-git commit -m "Initial commit: image anomaly detection"
-git branch -M main
-git remote add origin <your-repo-url>
-git push -u origin main
-```
-
-`.gitignore` excludes images, model files (`*.pt`, `*.pth`, ...), `outputs/`, the virtual environment and Python caches. Run `git status` before the first push to confirm nothing large is staged.
+- The PatchCore-style approach is good when you have no defect annotations.
+- The segmentation approach is better when you have labeled masks and want pixel-level defect localization.
+- The Canny approach is a lightweight rule-based alternative focused on contour structure after background removal.
